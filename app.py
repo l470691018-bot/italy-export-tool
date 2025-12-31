@@ -1,74 +1,57 @@
 import streamlit as st
 import google.generativeai as genai
 
-# --- 1. 基础配置 ---
-st.set_page_config(page_title="意大利出口合规专家", layout="wide")
+# --- 1. 核心配置 ---
+st.set_page_config(page_title="意大利合规助手(稳定版)", layout="wide", page_icon="🇮🇹")
 
-# 【此处粘贴您 B 账户中完整的 API Key】
+# 【请确保此处粘贴的是 B 账户中完整的、AIza 开头的密钥】
 API_KEY = "AIzaSyAAGztx9bEcEIyQZ4WRcNbrwMAvb_2g5fw"
 
-def call_gemini(prompt):
-    """自适应模型调用逻辑，解决 404 问题"""
-    # 尝试不同的模型名称写法
-    test_models = ['gemini-1.5-flash', 'models/gemini-1.5-flash']
-    last_err = ""
-    
-    for model_name in test_models:
-        try:
-            # 尝试开启联网搜索
-            model = genai.GenerativeModel(model_name, tools=[{'google_search_retrieval': {}}])
-            response = model.generate_content(prompt)
-            return response.text
-        except Exception as e:
-            last_err = str(e)
-            try:
-                # 如果联网搜索报错，尝试标准模式
-                model = genai.GenerativeModel(model_name)
-                response = model.generate_content(prompt)
-                return response.text
-            except:
-                continue
-    raise Exception(f"模型连接失败。原始错误：{last_err}")
-
-# --- 2. 页面设计 ---
-st.title("🇮🇹 意大利超市出口合规助手")
-st.info("💡 填入信息后点击生成。如果持续报错，请检查 API Key 复制是否包含空格。")
+# --- 2. 界面设计 ---
+st.title("🇮🇹 意大利超市出口合规与包装助手")
+st.markdown("---")
 
 with st.sidebar:
-    st.header("📋 产品参数输入")
-    with st.form("main_form"):
-        name = st.text_input("1. 产品名称", placeholder="如：不锈钢保温杯")
-        
-        # 跳转按钮：HS Code 搜索
-        st.markdown('<a href="https://www.baidu.com/s?wd=HS编码查询" target="_blank"><button style="cursor:pointer;background-color:#007bff;color:white;border:none;padding:8px 15px;border-radius:5px;width:100%">🔍 没编码？点此去百度搜</button></a>', unsafe_allow_html=True)
-        
+    st.header("📋 产品信息录入")
+    with st.form("input_form"):
+        name = st.text_input("1. 产品名称", placeholder="如：不锈钢吸管杯")
         hs_code = st.text_input("2. HS Code", placeholder="如：961700")
-        material = st.text_input("3. 材质成分", placeholder="如：304不锈钢")
+        material = st.text_input("3. 材质成分", placeholder="如：304不锈钢, PP塑料")
         power = st.selectbox("4. 供电情况", ["无供电", "含电池", "插电"])
         target = st.selectbox("5. 适用人群", ["通用/成人", "儿童 (3-14岁)", "婴幼儿 (0-3岁)"])
-        submitted = st.form_submit_button("🚀 生成方案报告", type="primary")
+        submitted = st.form_submit_button("🚀 生成方案", type="primary")
 
-# --- 3. 业务逻辑执行 ---
+# --- 3. 核心生成逻辑 ---
 if submitted:
     if not name or not hs_code:
-        st.error("⚠️ 品名和 HS Code 是必填项。")
+        st.error("⚠️ 请填写必要的产品名称和 HS Code。")
     else:
         try:
-            genai.configure(api_key=API_KEY.strip()) # 自动去除可能存在的空格
-            with st.spinner('🤖 正在联网检索 2025 意大利最新法规...'):
+            # 配置 API
+            genai.configure(api_key=API_KEY.strip())
+            
+            # 使用最基础、兼容性最强的模型调用方式
+            # 删除了 models/ 前缀和 tools 联网参数，以确保 100% 能跑通
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            
+            with st.spinner('🤖 正在调取专家知识库，生成合规报告...'):
                 prompt = f"""
-                你现在是意大利零售准入专家。针对产品：{name}, HS Code: {hs_code}, 材质: {material}, 供电: {power}, 人群: {target}。
-                请严格按照“总-分-总”形式输出：
-                1. 总：给出准入结论。
-                2. 分：
-                   - 用【表格】罗列检测项目及标准。
-                   - 用【表格】罗列包装必印的中意文案。
-                   - 罗列包装必须呈现的【图标清单】。
-                3. 总：提供一段【纯意文复制块】，方便设计师直接使用。
+                作为出口意大利的合规专家，分析以下产品：
+                产品：{name}, HS Code: {hs_code}, 材质: {material}, 供电: {power}, 人群: {target}。
+                
+                请严格按“总-分-总”结构输出：
+                1. 准入结论。
+                2. 检测项目与EN标准表格。
+                3. 包装图标要求。
+                4. 中意文对照包装文案。
+                5. 纯意大利语复制块。
                 """
-                result = call_gemini(prompt)
-                st.markdown(result)
+                response = model.generate_content(prompt)
+                
+                # 输出结果
+                st.markdown(response.text)
                 st.success("✅ 报告生成完毕！")
+                
         except Exception as e:
-            st.error(f"❌ 运行报错：{str(e)}")
-            st.warning("提示：如果看到 API_KEY_INVALID，请重新去 AI Studio 复制。")
+            st.error(f"❌ 运行出错：{str(e)}")
+            st.info("提示：如果依然显示 404，说明您的账号需要使用 gemini-pro 模型。")
