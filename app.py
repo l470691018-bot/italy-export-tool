@@ -2,8 +2,8 @@ import streamlit as st
 import google.generativeai as genai
 
 # --- 1. 初始化配置 ---
-st.set_page_config(page_title="意大利合规助手-设计师增强版", layout="wide", page_icon="🇮🇹")
-st.title("🇮🇹 意大利超市出口合规助手 (设计师版)")
+st.set_page_config(page_title="意大利超市包装交付助手", layout="wide", page_icon="🇮🇹")
+st.title("🇮🇹 意大利超市出口包装交付系统")
 
 # 安全读取密钥
 try:
@@ -14,7 +14,7 @@ except Exception:
     st.stop()
 
 # --- 2. 核心函数 ---
-def get_pro_report(prompt):
+def get_design_report(prompt):
     safety = [
         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
         {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -28,63 +28,67 @@ def get_pro_report(prompt):
 
 # --- 3. 界面设计 ---
 with st.sidebar:
-    st.header("📋 填写产品参数")
+    st.header("📋 产品核心参数")
     with st.form("input_form"):
         p_name = st.text_input("1. 品名", placeholder="如：PETG运动水杯")
-        hs_code = st.text_input("2. HS Code", placeholder="392330")
-        material = st.text_input("3. 核心材质", placeholder="PETG材质")
+        hs_code = st.text_input("2. HS Code", placeholder="392410")
+        material = st.text_input("3. 核心材质", placeholder="如：PETG杯身, PP盖, 硅胶密封圈")
         power = st.selectbox("4. 供电情况", ["无供电", "含电池", "插电"])
         target = st.selectbox("5. 适用人群", ["通用/成人", "儿童 (3-14岁)", "婴幼儿 (0-3岁)"])
-        submitted = st.form_submit_button("🚀 生成设计师版方案", type="primary")
+        submitted = st.form_submit_button("🚀 一键交付设计师版方案", type="primary")
 
-# --- 4. 业务逻辑执行 ---
+    st.divider()
+    st.link_button("🔍 HS Code 快速查询", "https://www.baidu.com/s?wd=HS编码查询")
+
+# --- 4. 交付逻辑执行 ---
 if submitted:
     if not p_name or not hs_code:
-        st.error("⚠️ 品名和 HS Code 是生成法律依据的基础，请务必填写！")
+        st.error("⚠️ 必须输入品名和 HS Code 才能确定合规逻辑。")
     else:
-        with st.spinner('🔍 正在计算材质属性并检索意大利最新法规...'):
+        with st.spinner('🤖 正在构建包装交付稿...'):
             try:
-                # 针对“精准文案”和“物理参数”优化的超级 Prompt
+                # 终极 Prompt：彻底抛弃虚假描述，只给真实数据和填空模板
                 full_prompt = f"""
-                作为出口意大利超市的专家，请为产品【{p_name}】提供最终交付级的包装文案。
-                产品参数：HS Code: {hs_code}, 材质: {material}, 供电: {power}, 人群: {target}。
+                你是一名精通意大利超市 (Lidl, Coop, Esselunga) 准入要求的包装设计师和合规官。
+                针对产品：{p_name}, HS: {hs_code}, 材质: {material}, 供电: {power}, 受众: {target}。
+                请直接输出以下两个核心环节，不要任何开场白和总结。
 
-                请严格按以下结构输出，内容必须是“最终确定态”，严禁使用“例如”：
-
-                ## 【总】快速准入结论
-                - 给出明确的准入等级。
-                - 核心依据：根据 {material} 判定是否涉及 MOCA (Reg. 1935/2004) 及具体迁移测试要求。
-
-                ## 【分】实操执行细节
-                ### 1. 物理参数与使用限制 (精准数据)
-                - 基于 {material} 的真实物理特性，给出最终的耐温范围、洗碗机/微波炉适用性建议。
-                - **强制要求**：如果材质是 PETG，耐温上限必须注明为 60°C 或 70°C，严禁给出超出科学常识的数据。
-
-                ### 2. 包装图标清单 (视觉元素)
-                | 图标名称 | 意大利语描述 | 备注 |
+                ### 1/ 检测做什么 (Testing Requirements)
+                请以表格形式列出该产品进入意大利超市必须通过的项目，严禁长篇大论。
+                | 检测项目 | 匹配法律/EN标准 | 目的 |
                 | :--- | :--- | :--- |
-                | (图标名，如CE) | (图标对应的法律文案) | (设计师位置/尺寸建议) |
 
-                ### 3. 设计师专用：双语包装文案 (填空式模板)
-                请提供以下信息的精确意文翻译，并将需要用户填空的部分用 [方括号中文备注] 标出：
-                - **进口商信息栏**：
-                  Importato da: [此处填公司全称/Ragione Sociale]
-                  Indirizzo: [此处填完整地址/Indirizzo Completo]
-                  Email: [此处填联系邮箱/Email di Contatto]
-                - **制造商信息栏**：
-                  Prodotto da: [此处填生产工厂名称/Nome Fabbrica]
-                  Made in China
-                - **产品成分描述**：按照意大利法规定制翻译。
+                ### 2/ 包装怎么做 (Packaging Design & Copy)
+                请按照以下“双语对照表”形式，为设计师提供最终的、可直接复制的文案。
+                左列为【模块/中文解释】，右列为【意大利语最终可复制文案】。
+                
+                **注意：必须基于 {material} 的真实物理属性。如果是 PETG，耐温上限必须写 60°C；严禁使用“例如”等占位符，必须根据知识库给出确定数据。**
 
-                ## 【总】设计师纯意文复制块
-                请提供一段完整的、没有任何中文解释干扰的文本块。
-                包含：材质回收代码 (如 {material} 对应的 PAP 21 或 PET 01)、意大利环境标签要求 (Dlgs 116/2020) 以及上述信息的占位符模板。
+                | 包装模块/位置 | 中文版本 (设计师参考) | 意大利语版本 (设计师复制到画稿) |
+                | :--- | :--- | :--- |
+                | **标题区** | 产品名称 / 规格 [由设计师填具体容量] | {p_name} [750 / 1000 / 2000] ml |
+                | **图标提示 (Icon Area)** | 图标1：食品接触安全标识 | [🍷🍴 图标] Per contatto con alimenti |
+                | **图标提示 (Icon Area)** | 图标2：年龄限制 (0-3岁禁用) | [🚫👶 (0-3)] Non adatto a bambini di età inferiore a 36 mesi |
+                | **图标提示 (Icon Area)** | 图标3：不含双酚A (若是塑胶) | Senza BPA |
+                | **核心警告 (Warnings)** | 注意事项：仅限手洗 | ⚠ AVVERTENZE: Solo lavaggio a mano |
+                | **核心警告 (Warnings)** | 注意事项：不可进洗碗机 | NON mettere in lavastoviglie |
+                | **核心警告 (Warnings)** | 注意事项：物理耐温上限 | 温度上限根据 {material} 实际物理属性设定 (如 Max 60°C) |
+                | **环境标签 (Etichettatura)** | 标题：环境标签说明 | ETICHETTATURA AMBIENTALE |
+                | **环境标签 (Etichettatura)** | 标语：请核实当地市政规定 | Verifica le disposizioni del tuo Comune. Svuotare prima di conferire. |
+                | **环境标签表 (Recycling)** | 表格行1：产品本身材质 (材质码+回收路径) | (根据 {material} 属性生成，如：Borraccia: ♺ 07-PETG - Plastica) |
+                | **环境标签表 (Recycling)** | 表格行2：配件/盖子材质 | (根据 {material} 属性生成，如：Tappo: ♺ 05-PP - Plastica) |
+                | **强制信息栏 (Logistics)** | 批次号、原产地 | Lotto No.: [此处填生产批次] / Made in China |
+                | **制造商信息 (Manufacturer)** | 厂商全称及地址 | Prodotto da: [此处填中国厂商信息] |
+                | **进口商信息 (Importer)** | 意大利进口商全称及地址 | Importato da: [此处填意大利公司信息] |
+                | **物流编码 (Codes)** | SKU / EAN 占位符 | SKU / EAN / Barcode [此处放条形码图形] |
+
+                请确保所有翻译精准且符合意大利零售业包装习惯。
                 """
                 
-                result = get_pro_report(full_prompt)
+                result = get_design_report(full_prompt)
                 st.markdown(result)
                 st.divider()
-                st.success("✅ 方案已根据产品材质属性精准生成。")
+                st.success("✅ 方案已就绪，设计师可直接开始作业。")
                 
             except Exception as e:
-                st.error(f"❌ 运行报错：{str(e)}")
+                st.error(f"❌ 运行中出现错误：{str(e)}")
