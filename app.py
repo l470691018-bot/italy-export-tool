@@ -2,8 +2,8 @@ import streamlit as st
 import google.generativeai as genai
 
 # --- 1. 初始化配置 ---
-st.set_page_config(page_title="意大利超市包装交付助手", layout="wide", page_icon="🇮🇹")
-st.title("🇮🇹 意大利超市出口包装交付系统")
+st.set_page_config(page_title="意大利超市包装交付助手-V4", layout="wide", page_icon="🇮🇹")
+st.title("🇮🇹 意大利超市出口包装交付系统 (设计师直供版)")
 
 # 安全读取密钥
 try:
@@ -14,7 +14,7 @@ except Exception:
     st.stop()
 
 # --- 2. 核心函数 ---
-def get_design_report(prompt):
+def get_final_delivery_report(prompt):
     safety = [
         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
         {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -30,65 +30,61 @@ def get_design_report(prompt):
 with st.sidebar:
     st.header("📋 产品核心参数")
     with st.form("input_form"):
-        p_name = st.text_input("1. 品名", placeholder="如：PETG运动水杯")
-        hs_code = st.text_input("2. HS Code", placeholder="392410")
-        material = st.text_input("3. 核心材质", placeholder="如：PETG杯身, PP盖, 硅胶密封圈")
+        p_name = st.text_input("1. 品名", placeholder="如：自行车灯 / PETG水杯")
+        hs_code = st.text_input("2. HS Code", placeholder="如：851210 (电子) / 392410 (塑胶)")
+        material = st.text_input("3. 材质成分", placeholder="如：ABS外壳, 锂电池 / 不锈钢杯身, PP盖")
         power = st.selectbox("4. 供电情况", ["无供电", "含电池", "插电"])
         target = st.selectbox("5. 适用人群", ["通用/成人", "儿童 (3-14岁)", "婴幼儿 (0-3岁)"])
-        submitted = st.form_submit_button("🚀 一键交付设计师版方案", type="primary")
-
-    st.divider()
-    st.link_button("🔍 HS Code 快速查询", "https://www.baidu.com/s?wd=HS编码查询")
+        submitted = st.form_submit_button("🚀 生成交付级包装方案", type="primary")
 
 # --- 4. 交付逻辑执行 ---
 if submitted:
     if not p_name or not hs_code:
-        st.error("⚠️ 必须输入品名和 HS Code 才能确定合规逻辑。")
+        st.error("⚠️ 必须输入品名和 HS Code。")
     else:
-        with st.spinner('🤖 正在构建包装交付稿...'):
+        with st.spinner('🤖 正在根据品类属性过滤不相关信息并构建文案...'):
             try:
-                # 终极 Prompt：彻底抛弃虚假描述，只给真实数据和填空模板
+                # 针对“品类过滤”和“文案原子化”深度优化的 Prompt
                 full_prompt = f"""
-                你是一名精通意大利超市 (Lidl, Coop, Esselunga) 准入要求的包装设计师和合规官。
-                针对产品：{p_name}, HS: {hs_code}, 材质: {material}, 供电: {power}, 受众: {target}。
-                请直接输出以下两个核心环节，不要任何开场白和总结。
+                你是一名精通意大利包装法 (Dlgs 116/2020) 和零售准入的专业合规官。
+                当前产品：{p_name}, HS: {hs_code}, 材质: {material}, 供电: {power}, 受众: {target}。
+
+                ### 关键任务：
+                1. **品类过滤**：根据 HS Code 和品名判定产品属性。如果是【非食品容器】（如电子产品、工具），严禁出现“食品接触标”、“BPA Free”、“洗碗机适用”等任何干扰信息。
+                2. **文案原子化**：环境标签（Etichettatura Ambientale）部分必须将每个部件拆分为独立的行。严禁将不同部件写在同一单元格内。每一行必须包含：[部件名称] | [材质标识] | [回收路径文案]。
+
+                请直接输出以下两个模块：
 
                 ### 1/ 检测做什么 (Testing Requirements)
-                请以表格形式列出该产品进入意大利超市必须通过的项目，严禁长篇大论。
+                以表格形式列出进入意大利超市必须通过的项目，严禁长文。
                 | 检测项目 | 匹配法律/EN标准 | 目的 |
                 | :--- | :--- | :--- |
 
-                ### 2/ 包装怎么做 (Packaging Design & Copy)
-                请按照以下“双语对照表”形式，为设计师提供最终的、可直接复制的文案。
-                左列为【模块/中文解释】，右列为【意大利语最终可复制文案】。
+                ### 2/ 包装怎么做 (Packaging Design - Ready to Copy)
+                请提供三列对照表：【包装模块/位置】 | 【中文版本 (供理解)】 | 【意大利语版本 (设计师直接复制)】。
                 
-                **注意：必须基于 {material} 的真实物理属性。如果是 PETG，耐温上限必须写 60°C；严禁使用“例如”等占位符，必须根据知识库给出确定数据。**
+                **注意：意大利语版本必须是“最终文案”，设计师直接粘贴，不需进行二次判断或删减。**
 
-                | 包装模块/位置 | 中文版本 (设计师参考) | 意大利语版本 (设计师复制到画稿) |
+                | 包装模块/位置 | 中文版本 (设计师参考) | 意大利语版本 (设计师直接复制) |
                 | :--- | :--- | :--- |
-                | **标题区** | 产品名称 / 规格 [由设计师填具体容量] | {p_name} [750 / 1000 / 2000] ml |
-                | **图标提示 (Icon Area)** | 图标1：食品接触安全标识 | [🍷🍴 图标] Per contatto con alimenti |
-                | **图标提示 (Icon Area)** | 图标2：年龄限制 (0-3岁禁用) | [🚫👶 (0-3)] Non adatto a bambini di età inferiore a 36 mesi |
-                | **图标提示 (Icon Area)** | 图标3：不含双酚A (若是塑胶) | Senza BPA |
-                | **核心警告 (Warnings)** | 注意事项：仅限手洗 | ⚠ AVVERTENZE: Solo lavaggio a mano |
-                | **核心警告 (Warnings)** | 注意事项：不可进洗碗机 | NON mettere in lavastoviglie |
-                | **核心警告 (Warnings)** | 注意事项：物理耐温上限 | 温度上限根据 {material} 实际物理属性设定 (如 Max 60°C) |
-                | **环境标签 (Etichettatura)** | 标题：环境标签说明 | ETICHETTATURA AMBIENTALE |
-                | **环境标签 (Etichettatura)** | 标语：请核实当地市政规定 | Verifica le disposizioni del tuo Comune. Svuotare prima di conferire. |
-                | **环境标签表 (Recycling)** | 表格行1：产品本身材质 (材质码+回收路径) | (根据 {material} 属性生成，如：Borraccia: ♺ 07-PETG - Plastica) |
-                | **环境标签表 (Recycling)** | 表格行2：配件/盖子材质 | (根据 {material} 属性生成，如：Tappo: ♺ 05-PP - Plastica) |
-                | **强制信息栏 (Logistics)** | 批次号、原产地 | Lotto No.: [此处填生产批次] / Made in China |
-                | **制造商信息 (Manufacturer)** | 厂商全称及地址 | Prodotto da: [此处填中国厂商信息] |
-                | **进口商信息 (Importer)** | 意大利进口商全称及地址 | Importato da: [此处填意大利公司信息] |
-                | **物流编码 (Codes)** | SKU / EAN 占位符 | SKU / EAN / Barcode [此处放条形码图形] |
+                | **标题信息** | 产品名称及核心规格 | {p_name} [根据实际参数填写规格] |
+                | **必放图标1** | 根据品类判定（如：CE标 / 0-3禁令标） | [图标说明：此处放置对应的图标符号] |
+                | **必放图标2** | 仅当产品带电时展示：WEEE垃圾桶打叉标 | (仅带电产品显示：[Simbolo: bidone barrato]) |
+                | **核心警告** | 物理/安全警告 (如：严禁直视光源/Max 60°C) | ⚠ AVVERTENZE: [基于 {p_name} 属性生成的精准意文] |
+                | **环境标签标题** | 环境标签总标题及引导语 | ETICHETTATURA AMBIENTALE. Verifica le disposizioni del tuo Comune. |
+                | **环境标签-部件A** | 主体材质 (如杯身或灯壳) | [部件名]: ♺ [材质码] - [回收容器名] |
+                | **环境标签-部件B** | 配件材质 (如盖子或电池) | [部件名]: [材质码或回收说明] - [回收容器名] |
+                | **环境标签-部件C** | 包装材料 (如纸盒或塑料袋) | [部件名]: [材质码] - [回收容器名] |
+                | **制造/进口商** | 制造商及进口商占位符 | Prodotto da: [Fabbrica] / Importato da: [Importatore] |
+                | **追溯信息** | 生产批次及产地 | Lotto No.: [Lotto] / Made in China |
 
-                请确保所有翻译精准且符合意大利零售业包装习惯。
+                请确保物理常识准确（如 PETG 不超过 60°C，电子产品不提食品安全）。
                 """
                 
-                result = get_design_report(full_prompt)
+                result = get_final_delivery_report(full_prompt)
                 st.markdown(result)
                 st.divider()
-                st.success("✅ 方案已就绪，设计师可直接开始作业。")
+                st.success("✅ 交付方案已根据品类属性精准过滤，设计师可直接取用。")
                 
             except Exception as e:
                 st.error(f"❌ 运行中出现错误：{str(e)}")
