@@ -1,99 +1,104 @@
 import streamlit as st
 import google.generativeai as genai
 
-# --- 1. Apple-Style CSS 注入 ---
+# --- 1. Apple-Style 极简视觉设计 ---
 st.set_page_config(page_title="Italy Compliance", layout="wide", page_icon="🇮🇹")
 
 st.markdown("""
     <style>
-    /* 苹果风极简排版 */
-    .stApp { background-color: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    .stTextInput, .stSelectbox, .stButton button { border-radius: 12px !important; }
-    .stAlert { border-radius: 16px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-    h1, h2, h3 { color: #1d1d1f; font-weight: 600; }
-    .main-card { background: white; padding: 2rem; border-radius: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin-bottom: 20px; }
-    /* 针对表格的优化 */
-    table { border-collapse: collapse !important; border-radius: 10px; overflow: hidden; }
-    th { background-color: #fbfbfd !important; color: #86868b !important; text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em; }
+    .stApp { background-color: #f5f5f7; font-family: -apple-system, system-ui, sans-serif; }
+    .stTextInput, .stSelectbox, .stButton button { border-radius: 10px !important; }
+    h1, h2, h3 { color: #1d1d1f; border-bottom: none; }
+    .card { background: white; padding: 25px; border-radius: 18px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); margin-bottom: 20px; }
+    table { width: 100%; border-radius: 12px; overflow: hidden; border: none !important; }
+    th { background-color: #fbfbfd !important; font-size: 12px; color: #86868b !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 安全读取密钥
+# 从 Secrets 安全读取 Key
 try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=API_KEY)
 except Exception:
-    st.error("❌ Secrets Error: GEMINI_API_KEY not found in settings.")
+    st.error("❌ 未找到 API KEY。请在 Streamlit 后台 Secrets 配置 GEMINI_API_KEY。")
     st.stop()
 
-# --- 2. 核心函数 ---
-def get_final_delivery(prompt):
+# --- 2. 核心逻辑：自动侦察模型路径，解决 404 ---
+def get_reliable_model():
+    # 尝试常见的模型名称变体
+    candidate_names = ['gemini-1.5-flash-latest', 'models/gemini-1.5-flash', 'gemini-1.5-flash']
     safety = [
         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
     ]
-    model = genai.GenerativeModel(model_name='gemini-1.5-flash', safety_settings=safety)
-    return model.generate_content(prompt).text
-
-# --- 3. 极简侧边栏 ---
-with st.sidebar:
-    st.title("Italy Compliance")
-    with st.form("input_form"):
-        p_name = st.text_input("产品名称", placeholder="如：Tritan运动水杯")
-        hs_code = st.text_input("HS Code", placeholder="392410")
-        material = st.text_input("材质成分", placeholder="如：Tritan杯身, PP盖子, 硅胶圈")
-        power = st.selectbox("供电情况", ["无供电", "含电池", "插电"])
-        target = st.selectbox("适用人群", ["成人", "儿童 (3-14岁)", "婴幼儿 (0-3岁)"])
-        submitted = st.form_submit_button("生成交付方案", type="primary")
     
-    st.markdown("---")
-    st.link_button("🔍 HS Code 查询", "https://www.baidu.com/s?wd=HS编码查询")
+    # 自动探测哪个名称有效
+    for name in candidate_names:
+        try:
+            model = genai.GenerativeModel(model_name=name, safety_settings=safety)
+            # 测试性调用，确认模型存在
+            model.generate_content("test", generation_config={"max_output_tokens": 1})
+            return model
+        except:
+            continue
+    
+    # 如果都失败，尝试动态列出可用模型
+    try:
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods and '1.5-flash' in m.name:
+                return genai.GenerativeModel(model_name=m.name, safety_settings=safety)
+    except:
+        pass
+    
+    raise Exception("无法连接到任何有效的 Gemini 模型，请检查 API Key 权限。")
 
-# --- 4. 逻辑输出 ---
+# --- 3. 极简交互界面 ---
+with st.sidebar:
+    st.title("Compliance")
+    with st.form("input_form"):
+        p_name = st.text_input("产品名称", placeholder="例如：自行车灯")
+        hs_code = st.text_input("HS Code", placeholder="851210")
+        material = st.text_input("材质成分", placeholder="ABS外壳, 锂电池, 纸盒")
+        power = st.selectbox("供电情况", ["含电池", "插电", "无供电"])
+        target = st.selectbox("适用人群", ["成人", "儿童 (3-14岁)", "婴幼儿 (0-3岁)"])
+        submitted = st.form_submit_button("生成包装方案", type="primary")
+
+# --- 4. 交付结果生成 ---
 if submitted:
     if not p_name or not hs_code:
-        st.warning("⚠️ 请输入必要的产品参数。")
+        st.warning("⚠️ 请输入产品名称和 HS Code。")
     else:
         with st.spinner('Preparing delivery documents...'):
             try:
-                # 增强版交付 Prompt：强制包含代码、地址、邮箱和精准翻译
+                model = get_reliable_model()
+                
                 prompt = f"""
-                你是一名精通意大利 116/2020 包装法令及欧盟 GPSR 安全标准的合规专家。
-                针对产品：{p_name}, HS: {hs_code}, 材质: {material}, 供电: {power}, 受众: {target}。
+                作为意大利零售合规专家，请为产品【{p_name}】提供最终交付级的包装文案。
+                HS Code: {hs_code}, 材质: {material}, 供电: {power}, 受众: {target}。
 
-                ### 强制要求：
-                1. **环境标签完整性**：必须为【每个】材质组件（如主体、盖子、密封圈、包装盒）提供精准的材质代码（如 PET 01, PP 05, PAP 21 等）及回收路径。
-                2. **法律责任项**：制造商和进口商信息必须包含 [名称]、[地址]、[邮箱/联系方式] 三个独立占位符。
-                3. **视觉风格**：输出内容必须极其干净。不相关图标绝对隐藏。
-                4. **翻译质量**：中文列必须是意语的 1:1 精准翻译。
+                ### 交付规范：
+                1. **环境标签(Dlgs 116/2020)**：必须为每个部件输出材质代码（如 ♺ 01 PET, ♺ 20 PAP）。
+                2. **责任实体**：制造商与进口商信息必须包含[公司名]、[完整地址]、[联系邮箱/电话]。
+                3. **内容精准**：如果不是食品容器，严禁出现🍷🍴标；如果带电，必须有WEEE图标提示。
+                4. **审核对齐**：中文列必须是意大利语的 1:1 精确翻译。
 
-                输出结构：
+                请严格按表格输出：
+                ### 1/ 检测项目表
+                | 项目 | 标准 | 目的 |
 
-                ### 1/ 检测要求 (Testing Requirements)
-                | 检测项目 | 匹配法律/EN标准 | 目的 |
+                ### 2/ 包装交付稿 (三列对照)
+                | 模块/位置 | 中文(审核) | 意大利语(复制) |
                 | :--- | :--- | :--- |
-
-                ### 2/ 包装交付稿 (Packaging Copy - Designer Ready)
-                | 模块/位置 | 中文版本 (审核用) | 意大利语版本 (设计师复制) |
-                | :--- | :--- | :--- |
-                | **标题信息** | {p_name} [规格参数] | {p_name} [Specifiche] |
-                | **核心警告** | 警告：[基于材质属性生成的精准物理限制翻译] | ⚠ AVVERTENZE: [Precisely Italian Text] |
-                | **环境标签** | 环境标签：请查阅当地市政规定。 | ETICHETTATURA AMBIENTALE: Verifica le disposizioni del tuo Comune. |
-                | **环境标识-主体** | [部件名A]: [材质码, 如 ♺ 07 OTHER] - [回收容器] | [Componente A]: [Codice] - [Raccolta] |
-                | **环境标识-配件** | [部件名B]: [材质码] - [回收容器] | [Componente B]: [Codice] - [Raccolta] |
-                | **环境标识-包装** | [部件名C]: [材质码] - [回收容器] | [Componente C]: [Codice] - [Raccolta] |
-                | **进口商信息** | 进口商: [公司名] / 地址: [完整地址] / 邮箱: [联系邮箱] | Importato da: [Ragione Sociale] / Indirizzo: [Indirizzo] / Email: [Contatto] |
-                | **制造商信息** | 制造商: [工厂名] / 地址: [完整地址] / 中国制造 | Prodotto da: [Nome Fabbrica] / Indirizzo: [Indirizzo] / Made in China |
-                | **追溯/物流** | 批次号: [填入] / 条形码 | Lotto No.: [Lotto] / EAN & Barcode |
-
-                *注：如果是电子产品，必须增加 WEEE 图标提示；如果是食品容器，必须增加高脚杯叉子标提示。*
+                | 标题信息 | {p_name} 规格 | {p_name} [Specifiche] |
+                | 图标提示 | [图标说明：CE, WEEE等] | [Simbolo: XXX] |
+                | 环境标签 | 环境标签说明引导语 | ETICHETTATURA AMBIENTALE... |
+                | 部件A标识 | [部件A]: [材质码] - [回收容器] | [Componente]: [Codice] - [Raccolta] |
+                | 进口商信息 | 进口商: [名] / 地址: [地址] / 邮箱: [邮箱] | Importato da: [Name] / Indirizzo: [Address] / Email: [Mail] |
+                | 制造商信息 | 制造商: [名] / 地址: [地址] / 产地 | Prodotto da: [Name] / Indirizzo: [Address] / Made in China |
                 """
                 
-                result = get_final_delivery(prompt)
-                st.markdown(f'<div class="main-card">{result}</div>', unsafe_allow_html=True)
-                st.success("✅ 交付方案已就绪。")
-                
+                response = model.generate_content(prompt)
+                st.markdown(f'<div class="card">{response.text}</div>', unsafe_allow_html=True)
+                st.success("✅ 方案生成完毕。")
             except Exception as e:
                 st.error(f"❌ 运行报错：{str(e)}")
