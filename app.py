@@ -2,70 +2,72 @@ import streamlit as st
 import google.generativeai as genai
 
 # --- 1. Apple-Style 极简视觉 ---
-st.set_page_config(page_title="Italy Export Tool", layout="wide", page_icon="🇮🇹")
+st.set_page_config(page_title="Italy Export Pro", layout="wide")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #f5f5f7; font-family: -apple-system, system-ui, sans-serif; color: #1d1d1f; }
-    .stTextInput input, .stSelectbox div, .stButton button { border-radius: 12px !important; border: 1px solid #d2d2d7 !important; }
-    .stButton button { background-color: #0071e3 !important; color: white !important; font-weight: 500 !important; border: none !important; }
-    .card { background: white; padding: 2.5rem; border-radius: 24px; box-shadow: 0 8px 30px rgba(0,0,0,0.04); border: 1px solid #e5e5e7; margin-top: 1.5rem; }
-    h1, h2, h3 { font-weight: 600; letter-spacing: -0.02em; border: none !important; }
-    th { background-color: #fbfbfd !important; color: #86868b !important; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }
+    .stApp { background-color: #f5f5f7; font-family: -apple-system, system-ui, sans-serif; }
+    .stTextInput input, .stSelectbox div, .stButton button { border-radius: 12px !important; }
+    .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.03); margin-top: 20px; }
+    h1, h2 { color: #1d1d1f; font-weight: 600; border: none !important; }
+    th { background-color: #fbfbfd !important; color: #86868b !important; font-size: 11px; text-transform: uppercase; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. 安全读取与自适应模型连接 ---
+# --- 2. 稳健的模型连接逻辑 ---
 try:
+    # 强制从 Secrets 读取，不给泄露留机会
     API_KEY = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=API_KEY.strip())
-except Exception:
-    st.error("❌ 密钥未配置：请在 Streamlit 后台 Secrets 中设置 GEMINI_API_KEY。")
+except:
+    st.error("❌ 密钥缺失：请在 Streamlit 后台 Secrets 中配置 GEMINI_API_KEY。")
     st.stop()
 
-def get_pro_content(prompt):
-    # 自动探测所有模型路径变体，解决 404 报错
-    model_ids = ['gemini-1.5-flash-latest', 'models/gemini-1.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
-    safety = [{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-              {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}]
-    for mid in model_ids:
+def get_delivery_response(prompt):
+    # 自动探测所有可用路径，解决 404 顽疾
+    for m_name in ['gemini-1.5-flash-latest', 'models/gemini-1.5-flash', 'gemini-1.5-flash']:
         try:
-            model = genai.GenerativeModel(mid, safety_settings=safety)
+            model = genai.GenerativeModel(m_name, safety_settings=[
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+            ])
             return model.generate_content(prompt).text
         except: continue
-    raise Exception("所有可用模型均无法连接，请检查密钥权限。")
+    raise Exception("API 连接失败，请确认 Key 状态。")
 
-# --- 3. 极简交互界面 ---
+# --- 3. 极简侧边栏 ---
 with st.sidebar:
     st.title("Compliance")
     with st.form("input"):
-        p_name = st.text_input("产品名称", placeholder="如：自行车灯 / PETG水杯")
-        hs_code = st.text_input("海关编码", placeholder="如：851210 / 392410")
-        material = st.text_input("核心材质", placeholder="如：ABS, 锂电池 / PETG, PP")
-        power = st.selectbox("供电情况", ["无供电", "含电池", "插电"])
+        p_name = st.text_input("产品品名", placeholder="如：不锈钢咖啡杯")
+        hs_code = st.text_input("海关编码", placeholder="961700")
+        material = st.text_input("核心材质", placeholder="如：304不锈钢, PP盖")
+        power = st.selectbox("带电情况", ["无供电", "含电池", "插电使用"])
         target = st.selectbox("人群划分", ["成人", "儿童 (3-14岁)", "婴幼儿"])
         submitted = st.form_submit_button("生成交付方案", type="primary")
 
-# --- 4. 极致交付逻辑 ---
+# --- 4. 精准交付逻辑 ---
 if submitted:
     if not p_name or not hs_code:
-        st.warning("⚠️ 请填入必填项。")
+        st.warning("⚠️ 基础参数缺失。")
     else:
-        with st.spinner('Preparing professional delivery...'):
+        with st.spinner('Preparing delivery documents...'):
             try:
-                # 强化版指令：1:1 对齐、物理事实映射、GPSR 追溯补全
+                # 强化版指令：事实映射、1:1 对齐、完整追溯
                 prompt = f"""
-                作为出口意大利专家。针对产品：{p_name}, HS: {hs_code}, 材质: {material}, 供电: {power}, 受众: {target}。
-                1/ 检测要求表：项目 | 标准 | 目的。
-                2/ 包装交付对照表：位置 | 中文(审核) | 意文(设计师复制)。
+                作为出口意大利合规专家。分析：{p_name}, HS:{hs_code}, 材质:{material}, 供电:{power}, 人群:{target}。
                 要求：
-                - 物理参数：基于 {material} 材质事实（如 PETG 必须标为 60°C）。
-                - 环境标签：各部件必须含材质码（如 ♺ 01 PET）。
-                - 企业追溯：含[公司名]、[地址]、[邮箱/电话]完整位。
-                - 绝对过滤：电子产品严禁出现食品图标。
+                1. 物理事实：基于 {material} 材质事实（如 PETG 必须标为 60°C）。
+                2. 环境标签：各部件必须有材质码（如 ♺ 05 PP）。
+                3. 责任实体：包含 [公司名]、[完整地址]、[邮箱/电话] 填空位。
+                4. 翻译对齐：中文列必须是意大利语的 1:1 翻译。
+                
+                直接输出：
+                - 检测项目表格 (项目/标准/目的)
+                - 包装交付对照表 (位置 | 中文审核 | 意大利语复制稿)
                 """
-                result = get_pro_content(prompt)
+                result = get_delivery_response(prompt)
                 st.markdown(f'<div class="card">{result}</div>', unsafe_allow_html=True)
-                st.success("✅ 交付文档已就绪。")
+                st.success("✅ 方案生成完毕。")
             except Exception as e:
                 st.error(f"❌ 系统错误：{str(e)}")
